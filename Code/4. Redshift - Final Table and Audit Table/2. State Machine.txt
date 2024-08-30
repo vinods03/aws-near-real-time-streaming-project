@@ -1,0 +1,73 @@
+Note that the State Machine used here (MyStateMachine-redshift-serverless-loader) is the same as the State Machine used in the real-time project (MyStateMachine-RedshiftLoader), except that this State Machine does not have the "elasticmapreduce:addStep" that moves data from S3 Staging to Redshift staging. This data movement is already completed by the last Glue job in the Glue workflow - new-orders-workflow-nrt.
+
+1. RedshiftData ExecuteStatement API: Move data from Redshift Staging to Redshift final:
+
+{
+  "WorkgroupName": "vinod-workgroup",
+  "Database": "ecommerce_db",
+  "SecretArn": "arn:aws:secretsmanager:us-east-1:100163808729:secret:redshift-serverless-secret-NoGLym",
+  "Sql": "call dev.enriched_orders_sp();"
+}
+
+Note that, for Provisioned Redshift cluster, we used below:
+
+{
+  "ClusterIdentifier": "redshift-cluster-1",
+  "Database": "ecommerce_db",
+  "DbUser": "awsuser",
+  "Sql": "call dev.enriched_orders_sp();"
+}
+
+
+
+2. RedshiftData DescribeStatement API: Get the Status of the Redshift Stored Procedure:
+
+In Configuration, add:
+{
+  "Id.$": "$.Id"
+}
+
+The RHS $.Id is derived by looking at the output of a run.
+The LHS Id.$ instead simply Id, is because Id here is an Input parameter and not a static value.
+
+3. Choice State next.
+
+Again by looking at a run's output, you can find out the parameter we need is Status and by looking at documentation, the status we need to wait & go back to "Get the Status of the Redshift Stored Procedure" is NOT $.Status == FINISHED
+
+4. The default rule will ensure that once the above stored proc is completed, the Redshift vs S3 audit proc is triggered.
+
+5. RedshiftData ExecuteStatement API: Redshift vs S3 Audit Procedure:
+
+{
+  "WorkgroupName": "vinod-workgroup",
+  "Database": "ecommerce_db",
+  "SecretArn": "arn:aws:secretsmanager:us-east-1:100163808729:secret:redshift-serverless-secret-NoGLym",
+  "Sql": "call dev.enriched_orders_sp();"
+}
+
+Note that, for Provisioned Redshift cluster, we used below:
+
+{
+  "ClusterIdentifier": "redshift-cluster-1",
+  "Database": "ecommerce_db",
+  "DbUser": "awsuser",
+  "Sql": "call dev.audit_orders_sp();"
+}
+
+6. RedshiftData DescribeStatement API: Get the Status of the above Redshift Stored Procedure:
+
+In Configuration, add:
+{
+  "Id.$": "$.Id"
+}
+
+The RHS $.Id is derived by looking at the output of a run.
+The LHS Id.$ instead simply Id, is because Id here is an Input parameter and not a static value.
+
+7. Choice State next.
+
+Again by looking at a run's output, you can find out the parameter we need is Status and by looking at documentation, the status we need to wait & go back to "Get the Status of the Redshift Stored Procedure" is NOT $.Status == FINISHED
+
+8. The default rule will go to Lambda Invoke that checks audit table and sends out notifications for each run_id that is yet to be resolved.
+In the lambda invoke api, provide the name of the lambda function: orders-audit-fn
+

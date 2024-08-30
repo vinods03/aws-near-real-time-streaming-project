@@ -1,0 +1,15 @@
+Source Event:
+
+{
+  "source": ["aws.glue"],
+  "detail-type": ["Glue Job State Change"],
+  "detail": {
+    "jobName": ["new_order_s3Staging_to_RedshiftStaging"],
+    "state": ["SUCCEEDED"]
+  }
+}
+
+
+Target: 
+
+MyStateMachine-redshift-serverless-loader

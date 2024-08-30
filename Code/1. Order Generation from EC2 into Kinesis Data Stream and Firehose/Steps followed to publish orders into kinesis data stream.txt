@@ -1,0 +1,38 @@
+Upload order_generator.py & order_publisher_batch.py into S3 bucket s3://real-time-streaming-project
+
+Create a Kinesis data stream orders-stream.
+
+Create a Kinesis firehose with source as the above orders-stream and destination bucket as s3://real-time-streaming-project and prefix landing-area/
+
+There will be 2 runs - one to understand schema and the second to convert to parquet.
+
+Launch a t2.micro Ec2 instance with Instance profile that has access to S3. The first run:
+
+Login to the Ec2 instance:
+aws s3 cp s3://real-time-streaming-project-vinod/order_generator.py .
+aws s3 cp s3://real-time-streaming-project-vinod/order_publisher_batch.py .
+sudo yum install pip
+sudo pip install boto3
+python3 order_publisher_batch.py orders-stream 20 
+(orders-stream is the name of the kinesis data stream & 20 is the batch size)
+
+Create and run the Glue crawler (new-orders-landing-area-crawler) on s3://real-time-streaming-project/landing-area/ and note down the Glue Data Catalog table structure - this is a reference table that will be used in the next step.
+
+----------------------------
+
+Now, we will create a "schema table" - new-orders-landing-area-schema - in Glue Data Catalog, with structure same as above reference table but with Data format as Parquet (source type is S3). Note that, for products -> you need to specify the data type as array<struct<>> and manually list down the columns/data-types of the struct. You cannot copy and paste the schema for this column from the reference table to this schema table - if you do that, the data type for "products" will be listed as "unknown" instead of "array".
+
+Go back to firehose now, Enable "record format" conversion now, specify output format as "Parquet" and use the "new-orders-landing-area-schema" as the Schema for source records.
+
+In the first run, we observed that, Firehose is automatically taking care of the partitioning based on the timestamp column.
+So, we do not need data transformation using lambda here.
+
+If there is no timestamp column and you see that data in S3 is not getting partitioned, or you want to partition by a different timestamp column, then you need to turn on data transformation using lambda, enable dynamic partitioning, inline parsing for JSON etc. 
+Refer "C:\Vinod\AWSDataEngineering\8. FO to DW\Archive\Trying it out again - aug 2023 (near real-time)\3. Kinesis firehose settings and Lambda Transformer.txt.
+
+The second run: (after cleanup of the data loaded in the first run)
+python3 order_publisher_batch.py orders-stream 20 
+
+Verify data is stored as parquet in S3 and also verify data/counts in Landing area through Athena after Glue crawler has run.
+
+You can now drop the reference table created in the first run as it is no loger needed.

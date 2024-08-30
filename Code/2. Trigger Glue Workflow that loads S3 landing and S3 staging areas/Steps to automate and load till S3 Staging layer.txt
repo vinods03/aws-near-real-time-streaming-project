@@ -1,0 +1,52 @@
+On the S3 bucket real-time-streaming-project-vinod, set "Send notifications to Amazon EventBridge for all events in this bucket" to On.
+
+===============================================
+
+Use the Crawler created in prior step - new-orders-landing-area-crawler - with S3 path as s3://real-time-streaming-project-vinod/landing-area/ and "exclude pattern" as "_spark_metadata/**"
+For Subsequent crawler runs, choose "Crawl new sub-folders only".
+
+===============================================
+
+Create a Glue Spark ETL job - new_orders_s3Landing_to_s3Staging - that explodes the "product" column into multiple rows, splits the struct column into individual columns using the "Transform - SQL Query" method. In the same "Transform - SQL Query" step, we also rename the partition columns. Another important aspect here is the addition of the "uuid" stage, which generates a unique number for every row. During the "explode" operation, 1 row will get split into multiple rows depending on the number of products in the order and generating a unique number for every row here will help in the redshift layer to ensure no row is getting dropped. Without this unique number, we cannot ensure no row gets dropped in the redshift stage.
+Because in the redshift layer, comparison of loaded vs not-loaded records needs to be at the most granular level i.e. the product level and not at the order level. If comparison is done at order level, 1 product of an order might get loaded into redshift and remaining 2 or 3 products in the same order might get dropped.
+
+Finally the data is moved into s3://real-time-streaming-project-vinod/staging-area/.
+Also note, how the partitioning keys are specified in the Target S3 step.
+
+===============================================
+
+Create a Crawler - new-orders-staging-area-crawler - with S3 path as s3://real-time-streaming-project-vinod/staging-area/ and "exclude pattern" as "_spark_metadata/**"
+For Subsequent crawler runs, choose "Crawl new sub-folders only".
+
+===============================================
+
+Create a Glue workflow - new-orders-workflow-nrt - that has the landing-area crawler, landing-to-staging spark etl job and the staging-area-crawler, with source trigger as "EventBridge event"
+
+===============================================
+
+Then create an eventbridge rule for landing-area/ folder with source pattern as:
+
+{
+  "source": ["aws.s3"],
+  "detail-type": ["Object Created"],
+  "detail": {
+    "bucket": {
+      "name": ["real-time-streaming-project-vinod"]
+    },
+    "object": {
+      "key": [{
+        "prefix": "landing-area/"
+      }]
+    }
+  }
+} 
+
+Target as "new-orders-workflow-nrt"
+
+=============================================
+
+Disable rules - new-orders-landing-area-rule, new-orders-staging-area-rule, new-orders-redshift-staging-area-rule - created for the real time scenario/project.
+
+==============================================
+
+Publish data into Kinesis and verify the flow / data in S3 landing and staging areas.

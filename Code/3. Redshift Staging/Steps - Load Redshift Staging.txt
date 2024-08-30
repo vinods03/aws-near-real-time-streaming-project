@@ -1,0 +1,64 @@
+Using the Redshift Serverless approach.
+
+Created a workgroup: "vinod-workgroup". Used a base capacity of 40 RPU. Selected the VPC, subnets and the security groups for the workgroup.
+A Workgroup is a collection of compute resources from which an endpoint is created. Compute properties include network and security settings.
+
+Created a namespace: "vinod-namespace".
+A Namespace is a collection of database objects and users. Data properties include database name and password, permissions, and encryption and security.
+Associated username, password and IAM role for the namespace.
+The default database "dev" will be created.
+
+Connect to the "vinod-workgroup" in Query Editor.
+
+create database ecommerce_db;
+
+Connect to this database in the query editor.
+
+create schema dev;
+
+create table dev.orders(
+    order_key VARCHAR,
+    order_id VARCHAR,
+    customer_id VARCHAR,
+    seller_id VARCHAR,
+    product_code VARCHAR,
+    product_name VARCHAR,
+    product_price int,
+    product_qty int,
+    order_purchase_timestamp VARCHAR
+);
+
+
+We do not need the dev.orders_chkpoint table as the Glue Spark ETL job will take care of the bookmarking.
+
+
+===============================================
+
+
+Before creating a Glue job that reads from S3/Glue Catalog Table and writes into Redshift, we must create a Connection in Glue.
+
+Created this connection - Redshift connection - with Credential Type as "AWS Secrets Manager" instead of "Username and Password".
+Was facing issue when using "Username and Password" credential type in the Glue connector to Redshift.  
+So, created this "redshift-serverless-secret" in Secrets Manager with workgroup/namespace/username/password details and used this in Glue Connection to Redshift.
+Used the "ecommerce_db" database in the connection, instead of the default "dev" database.
+Also, in Redshift, i had to "Edit admin credentials" on the namespace and re-set the password, else i was getting authentication failed error.
+
+Also, we specify the VPC/subnet in which the Glue job needs to run - this must be in the same VPC as the Redshift workgroup/namespace.
+Also, using the same security group in the Glue job that is associated with the Redshift workgroup/namespace - this security group must allow Redshift traffic on port 5439 from anywhere and all TCP traffic on port range 0-65535 from the same security group (cross-reference).
+
+Created VPC endpoints for S3 and Secrets Manager as there was errors thrown related to this during the testing of the connection.
+Not sure if these are really needed. Test the connection.
+
+Now, finally, create a Glue Spark ETL Job - new_order_s3Staging_to_RedshiftStaging - with Job bookmark enabled, timeout of 10 minutes and 1 retry.
+The source is the Glue Data Catalog Table ecommerce-database.new-orders-staging-area.
+The target is Redshift using the connection created above, select the schema, table, insert/update etc options.
+Only if the connection is established successfully, schema/tables will be listed.
+
+Save the job and execute.
+Verify job runs successfully.
+Verify counts in Redshift query editor.
+
+Add this Glue job in The Glue workflow - new-orders-workflow-nrt - created in prior step.
+
+Publich messages into Kinesis and validate all crawlers / jobs in workflow have run fine.
+Also, verify that Redhsift staging count is the same as S3 staging count after multiple runs (greate than 1 run) to validate that Glue bookmarking is working as expected.
