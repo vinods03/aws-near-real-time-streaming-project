@@ -1,1 +1,2 @@
-# aws-near-real-time-streaming-project
+In https://github.com/vinods03/aws-real-time-streaming-project, we saw the implementation of a real-time streaming project for continuous workloads using non-serverless components like EMR.
+In this repo, the ETL pipeline is designed for adhoc/variable workloads. So using serverless components like Glue. Any data discrepancy between the layers is also captured after every load and appropriate notifications are sent. 
