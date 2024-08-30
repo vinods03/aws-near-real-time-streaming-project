@@ -1,0 +1,1 @@
+# aws-near-real-time-streaming-project
